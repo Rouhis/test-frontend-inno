@@ -1,114 +1,67 @@
 import React, { useState } from 'react';
+import DatePicker from 'react-datepicker';
+import 'react-datepicker/dist/react-datepicker.css';
 import Plot from 'react-plotly.js';
 
 const GraphComponent = () => {
-  const [year, setYear] = useState(2023);
-  const [month, setMonth] = useState(7);
-  const [day, setDay] = useState(1);  // For daily view
-  const [viewType, setViewType] = useState('Monthly');  // Monthly or Daily
-  const [dataType, setDataType] = useState('Both');
+  const [startDate, setStartDate] = useState(new Date());
+  const [endDate, setEndDate] = useState(new Date());
+  const [dataTypes, setDataTypes] = useState(['temperature', 'windspeed', 'rain']);  // Example data types
+  const [selectedDataTypes, setSelectedDataTypes] = useState([]);
   const [graphData, setGraphData] = useState([]);
-  const [layout, setLayout] = useState({});
+  const [layout, setLayout] = useState({
+    width: 1000,  // Set the width of the graph
+    height: 800  // Set the height of the graph
+  });
 
   const fetchGraph = () => {
-    let url;
+    const url = new URL('http://127.0.0.1:5000/get_graph');
+    url.searchParams.append('start_date', `${startDate.getFullYear()}-${(startDate.getMonth() + 1).toString().padStart(2, '0')}-${startDate.getDate().toString().padStart(2, '0')} 00:00`);
+    url.searchParams.append('end_date', `${endDate.getFullYear()}-${(endDate.getMonth() + 1).toString().padStart(2, '0')}-${endDate.getDate().toString().padStart(2, '0')} 23:59`);
+    selectedDataTypes.forEach(type => url.searchParams.append('data_types', type));
+    url.searchParams.append('aggregation_type', 'weekly');
 
-    // Choose the API endpoint based on the selected view type (Monthly or Daily)
-    if (viewType === 'Monthly') {
-      url = `http://127.0.0.1:5000/get_graph?year=${year}&month=${month}&data_type=${dataType}`;
-    } else if (viewType === 'Daily') {
-      url = `http://127.0.0.1:5000/get_graph_for_day?year=${year}&month=${month}&day=${day}&data_type=${dataType}`;
-    }
-
-    // Fetch the graph data from the backend with the selected year, month, day (if applicable), and data type
     fetch(url)
       .then((response) => response.json())
       .then((data) => {
-        setGraphData(data.data);  // Set graph data (from backend)
-        setLayout(data.layout);   // Set layout (from backend)
+        setGraphData(data.data);
+        console.log(url) // Set graph data (from backend)
+        setLayout(prevLayout => ({ ...prevLayout, ...data.layout }));   // Set layout (from backend)
       })
       .catch((error) => console.error('Error fetching graph:', error));
   };
 
+  const handleDataTypeChange = (event) => {
+    const { options } = event.target;
+    const selected = [];
+    for (const option of options) {
+      if (option.selected) {
+        selected.push(option.value);
+      }
+    }
+    setSelectedDataTypes(selected);
+  };
+
   return (
     <div>
-      <h1>Plotly Graph from Flask Backend</h1>
-
-      {/* Dropdown for view type (Monthly or Daily) */}
-      <label>View Type:</label>
-      <select value={viewType} onChange={(e) => setViewType(e.target.value)}>
-        <option value="Monthly">Monthly</option>
-        <option value="Daily">Daily</option>
-      </select>
-
-      {/* Dropdown for year */}
-      <label>Year:</label>
-      <select value={year} onChange={(e) => setYear(e.target.value)}>
-        {[2020, 2021, 2022, 2023].map((yr) => (
-          <option key={yr} value={yr}>
-            {yr}
-          </option>
-        ))}
-      </select>
-
-      {/* Dropdown for month */}
-      <label>Month:</label>
-      <select value={month} onChange={(e) => setMonth(e.target.value)}>
-        {[
-          { name: 'January', value: 1 },
-          { name: 'February', value: 2 },
-          { name: 'March', value: 3 },
-          { name: 'April', value: 4 },
-          { name: 'May', value: 5 },
-          { name: 'June', value: 6 },
-          { name: 'July', value: 7 },
-          { name: 'August', value: 8 },
-          { name: 'September', value: 9 },
-          { name: 'October', value: 10 },
-          { name: 'November', value: 11 },
-          { name: 'December', value: 12 },
-        ].map((mnth) => (
-          <option key={mnth.value} value={mnth.value}>
-            {mnth.name}
-          </option>
-        ))}
-      </select>
-
-      {/* Input for day selection, only shown when viewType is Daily */}
-      {viewType === 'Daily' && (
-        <>
-          <label>Day:</label>
-          <input
-            type="number"
-            value={day}
-            onChange={(e) => setDay(e.target.value)}
-            min="1"
-            max="31"
-          />
-        </>
-      )}
-
-      {/* Dropdown for data type */}
-      <label>Data Type:</label>
-      <select value={dataType} onChange={(e) => setDataType(e.target.value)}>
-        {['Temperature', 'Rain', 'Wind', 'Both'].map((type) => (
-          <option key={type} value={type}>
-            {type}
-          </option>
-        ))}
-      </select>
-
-      {/* Button to fetch the graph */}
-      <button onClick={fetchGraph}>Load Graph</button>
-
-      {/* Render the graph using Plotly */}
-      {graphData.length > 0 && (
-        <Plot
-          data={graphData}
-          layout={layout}
-          style={{ width: '100%', height: '100%' }}  // Adjust the size of the graph
-        />
-      )}
+      <div>
+        <label>Start Date:</label>
+        <DatePicker selected={startDate} onChange={(date) => setStartDate(date)} />
+      </div>
+      <div>
+        <label>End Date:</label>
+        <DatePicker selected={endDate} onChange={(date) => setEndDate(date)} />
+      </div>
+      <div>
+        <label>Data Types:</label>
+        <select multiple={true} value={selectedDataTypes} onChange={handleDataTypeChange}>
+          {dataTypes.map((type) => (
+            <option key={type} value={type}>{type}</option>
+          ))}
+        </select>
+      </div>
+      <button onClick={fetchGraph}>Fetch Graph</button>
+      <Plot data={graphData} layout={layout} />
     </div>
   );
 };
